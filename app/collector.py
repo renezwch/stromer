@@ -355,9 +355,13 @@ def poll_position(bike_id: int):
 
 
 def poll_settings(bike_id: int):
-    fields = "tuning_speed,tuning_torque,tuning_agility,recup_level_user_offset,user_torque_sensitivity"
-    data, body = api_get(f"bike/{bike_id}/settings/", {"fields": fields})
-    s = first(data)
+    # The server accepts only the field groups of the official app; mixing groups gives "syntax_error".
+    s, bodies = {}, []
+    for fields in ("tuning_speed,tuning_torque,tuning_agility", "recup_level_user_offset,user_torque_sensitivity"):
+        data, body = api_get(f"bike/{bike_id}/settings/", {"fields": fields})
+        s.update(first(data))
+        bodies.append(json.loads(body))
+    body = json.dumps(bodies)
     save_raw("settings", bike_id, True, body)
     row = (s.get("tuning_speed"), s.get("tuning_torque"), s.get("tuning_agility"),
            s.get("recup_level_user_offset"), s.get("user_torque_sensitivity"))
