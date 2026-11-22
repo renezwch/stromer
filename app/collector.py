@@ -574,16 +574,23 @@ def login_page(message: str = "") -> str:
     url = start_login()
     return f"""<div class="card"><h2>Bei Stromer anmelden</h2>
 {f'<p class="bad">{e(message)}</p>' if message else ''}
+<p class="muted">Stromer schickt nach dem Login an <code>stromer://auth?code=…</code>. Der Browser kann das nicht öffnen,
+es passiert scheinbar nichts. Die Adresse steckt aber im Netzwerk-Protokoll. Bist du bei Stromer schon angemeldet,
+kommt gar kein Login-Formular, nur dieser Sprung.</p>
 <ol>
-<li><a class="btn" href="{e(url)}" target="_blank" rel="noopener">Login öffnen</a> und mit dem Stromer-Konto anmelden.
-Das Passwort gibst du nur auf stromer-portal.ch ein.</li>
-<li>Nach dem Login will der Browser <code>stromer://auth?code=…</code> öffnen und scheitert. Diese Adresse kopieren:
-<ul><li><b>Chrome/Edge:</b> vorher Entwicklertools öffnen (F12, Tab „Netzwerk“), dann im letzten Eintrag „authorize“ unter „Location“.</li>
-<li><b>Firefox/Safari:</b> steht in der Adresszeile oder in der Fehlermeldung.</li></ul></li>
+<li>In Chrome oder Edge einen <b>neuen Tab</b> öffnen.</li>
+<li>Dort <b>F12</b> drücken, Tab <b>„Netzwerk“</b> wählen, Haken bei <b>„Log beibehalten“</b> (Preserve log).</li>
+<li>Diese Adresse kopieren und im neuen Tab in die Adresszeile einfügen:
+<input type="text" id="authurl" readonly value="{e(url)}" onclick="this.select()">
+<p><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('authurl').value);this.textContent='Kopiert'">Adresse kopieren</button></p></li>
+<li>Falls ein Formular kommt: bei Stromer anmelden. Das Passwort gibst du nur auf stromer-portal.ch ein.</li>
+<li>Im Netzwerk-Protokoll den Eintrag <b>„authorize/?response_type=…“</b> mit Status <b>302</b> anklicken.
+Unter „Antwort-Header“ steht <b>location: stromer://auth?code=…</b>. Diesen ganzen Wert kopieren.</li>
 <li>Innerhalb von etwa 60 Sekunden hier einfügen:</li></ol>
-<form method="post" action="/login"><input type="text" name="url" placeholder="stromer://auth?code=...&state=..." autofocus>
+<form method="post" action="/login"><input type="text" name="url" placeholder="stromer://auth?code=...&state=...">
 <p><button>Anmelden</button></p></form>
-<p class="muted">Der Zugang (Token) bleibt auf mynas in {e(TOKEN_PATH)} und wird nie angezeigt.</p></div>"""
+<p class="muted">Jedes Laden dieser Seite erzeugt eine neue Adresse; immer die aktuelle verwenden.
+Der Zugang (Token) bleibt auf mynas in {e(TOKEN_PATH)} und wird nie angezeigt.</p></div>"""
 
 
 class Handler(BaseHTTPRequestHandler):
