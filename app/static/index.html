@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mein Stromer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--card2:#eef0f2;--fg:#14181c;--muted:#5d6670;--line:#dde2e6;--accent:#a57c00;--accent-bg:#fff2c2;
+--green:#1e8a50;--red:#c62828;--blue:#2f6fd6;--amber:#b77d00;--violet:#6f4fd6;--radius:20px}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1013;--card:#161b20;--card2:#1e252b;--fg:#e7e9eb;--muted:#9aa4ae;--line:#283037;
+--accent:#f5b700;--accent-bg:#3a2e00;--green:#2fb36d;--red:#e5484d;--blue:#4c8ff7;--amber:#f5b700;--violet:#9a7cf2}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.top{position:sticky;top:0;z-index:1000;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:auto;padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px;flex:1;min-width:160px}
+.brand i{width:26px;height:26px;border-radius:50%;background:var(--accent);display:inline-block;box-shadow:inset 0 0 0 5px var(--card)}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav a{padding:7px 12px;border-radius:999px;text-decoration:none;color:var(--muted);font-weight:600}
+nav a.on{background:var(--accent-bg);color:var(--fg)}
+select{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:inherit}
+main{max-width:1180px;margin:auto;padding:16px 16px 48px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.card h2{margin:0 0 14px;font-size:13px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.card h2 .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.tile{background:var(--card2);border-radius:14px;padding:12px 14px}
+.tile .l{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-size:22px;font-weight:650;margin-top:2px;white-space:nowrap}
+.tile .v small{font-size:13px;font-weight:500;color:var(--muted);margin-left:3px}
+.hero{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.hero h1{margin:0;font-size:28px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 6px}
+.badge{padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.b-green{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
+.b-red{background:color-mix(in srgb,var(--red) 18%,transparent);color:var(--red)}
+.b-amber{background:color-mix(in srgb,var(--amber) 20%,transparent);color:var(--amber)}
+.b-blue{background:color-mix(in srgb,var(--blue) 18%,transparent);color:var(--blue)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}.row span:first-child{color:var(--muted)}.row span:last-child{font-weight:550;text-align:right}
+.bar{height:9px;border-radius:5px;background:var(--card2);overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;border-radius:5px}
+#map{height:380px;border-radius:14px;z-index:0}
+.timeline{position:relative;margin-left:8px}
+.ti{position:relative;padding:0 0 18px 22px;border-left:2px solid var(--line)}
+.ti:last-child{border-left-color:transparent}
+.ti:before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--muted)}
+.ti:first-child:before{background:var(--accent)}
+.ti .d{color:var(--accent);font-weight:600;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.n,th.n{text-align:right}.scroll{overflow-x:auto}
+.chart{position:relative;height:280px}
+.seg{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.seg button{background:var(--card2);border:0;color:var(--fg);padding:6px 12px;border-radius:999px;font:inherit;font-weight:600;cursor:pointer}
+.seg button.on{background:var(--accent);color:#1b1400}
+.btn{display:inline-block;background:var(--accent);color:#1b1400;text-decoration:none;font-weight:650;padding:8px 14px;border-radius:12px}
+.warn{background:color-mix(in srgb,var(--amber) 14%,transparent);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.big{font-size:34px;font-weight:700;line-height:1.1}
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <div class="brand"><i></i><span id="title">Mein Stromer</span></div>
+  <nav>
+    <a href="#uebersicht" data-v="uebersicht">Übersicht</a>
+    <a href="#statistik" data-v="statistik">Statistik</a>
+    <a href="#service" data-v="service">Service</a>
+    <a href="/daten">Daten</a>
+  </nav>
+  <select id="bike" hidden></select>
+</div></div>
+<main id="app"><p class="muted">Lade …</p></main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = v => v == null ? "–" : String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function fmt(v, d = 0) {
+  if (v == null || isNaN(v)) return "–";
+  const s = Number(v).toFixed(d).split(".");
+  s[0] = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  return s.join(".");
+}
+const unit = (v, d, u) => v == null || isNaN(v) ? "–" : `${fmt(v, d)}<small>${u}</small>`;
+const dt = ts => ts ? new Date(ts * 1000).toLocaleString("de-CH", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "–";
+const dd = ts => ts ? new Date(ts * 1000).toLocaleDateString("de-CH", {day:"2-digit", month:"2-digit", year:"numeric"}) : "–";
+const ymd = s => { if (!s) return null; s = String(s).replace(/-/g, ""); return new Date(+s.slice(0,4), +s.slice(4,6) - 1, +s.slice(6,8) || 1); };
+const dYmd = s => { const d = ymd(s); return d ? d.toLocaleDateString("de-CH", {day:"2-digit", month:"2-digit", year:"numeric"}) : "–"; };
+function ago(ts) {
+  if (!ts) return "–";
+  const d = Date.now() / 1000 - ts;
+  if (d < 90) return "gerade eben";
+  if (d < 5400) return `vor ${Math.round(d / 60)} min`;
+  if (d < 172800) return `vor ${Math.round(d / 3600)} h`;
+  return `vor ${Math.round(d / 86400)} Tagen`;
+}
+const dur = s => { if (s == null) return "–"; const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${fmt(h)} h ${m} min` : `${m} min`; };
+const row = (l, v) => v == null || v === "–" || v === "" ? "" : `<div class="row"><span>${esc(l)}</span><span>${v}</span></div>`;
+const tile = (l, v) => `<div class="tile"><div class="l">${esc(l)}</div><div class="v">${v}</div></div>`;
+
+const PRESETS = {"50/50/50": "Standard", "50/100/80": "Stadt", "80/50/30": "Tour", "60/50/25": "Schnee"};
+const WARRANTY = {
+  no_extension: "Keine Verlängerung", extension_activated: "Verlängerung aktiv", offer_sent: "Angebot gesendet",
+  offer_declined: "Angebot abgelehnt", offer_expired: "Angebot abgelaufen", max_reached: "Maximale Laufzeit erreicht",
+};
+const CATEGORY = {controller: "Controller", frame: "Rahmen", battery: "Akku", motor: "Motor", display: "Display",
+  omni: "OMNI-Modul", charger: "Ladegerät", sui: "Display", fork: "Gabel", iot: "IoT-Modul"};
+
+let bikeId = null, charts = [], map = null;
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  return r.json();
+}
+
+function ring(pct, color) {
+  const r = 62, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, (pct ?? 0) / 100));
+  return `<svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Akku ${fmt(pct)} %">
+    <circle cx="80" cy="80" r="${r}" fill="none" stroke="${css("--card2")}" stroke-width="14"/>
+    <circle cx="80" cy="80" r="${r}" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"
+      stroke-dasharray="${c * f} ${c}" transform="rotate(-90 80 80)"/>
+    <text x="80" y="80" text-anchor="middle" font-size="34" font-weight="700" fill="${css("--fg")}">${pct == null ? "–" : fmt(pct) + "%"}</text>
+    <text x="80" y="104" text-anchor="middle" font-size="13" fill="${css("--muted")}">Akku</text></svg>`;
+}
+
+function cleanup() {
+  charts.forEach(c => c.destroy()); charts = [];
+  if (map) { map.remove(); map = null; }
+}
+
+// --------------------------------------------------------------------------------------- Übersicht
+async function viewOverview() {
+  const o = await api(`/api/overview?bike=${bikeId}`);
+  const b = o.bike || {}, s = o.state || {}, p = o.position || {}, set = o.settings || {}, u = o.units || {};
+  const svc = o.service || {}, mf = b.maintenance_feature || {};
+  const soc = s.battery_SOC, socColor = soc == null ? css("--muted") : soc < 15 ? css("--red") : soc < 35 ? css("--amber") : css("--green");
+  const name = b.nickname || b.bikemodel || "Mein Stromer";
+  $("#title").textContent = name;
+  const tuning = set.tuning_speed != null ? `${set.tuning_speed}/${set.tuning_torque}/${set.tuning_agility}` : null;
+  const lifeWhKm = s.total_energy_consumption && s.total_distance ? s.total_energy_consumption / s.total_distance : null;
+  const nextKm = mf.next_maintenance_km != null && s.total_distance != null ? mf.next_maintenance_km - s.total_distance : null;
+  const sinceKm = mf.last_maintenance_reset_km != null && s.total_distance != null ? s.total_distance - mf.last_maintenance_reset_km : null;
+  const interval = mf.next_maintenance_interval || (mf.next_maintenance_km - mf.last_maintenance_reset_km);
+  const logs = (svc.servicelogs || []).slice().sort((a, c) => (c.created_on || 0) - (a.created_on || 0));
+  const per = o.periods || {};
+  const health = s.battery_health;
+
+  $("#app").innerHTML = `
+  ${o.logged_in ? "" : `<div class="warn">Der Datensammler ist nicht bei Stromer angemeldet. <a href="/login">Jetzt anmelden</a></div>`}
+  <div class="grid g2">
+    <div class="card"><div class="hero">
+      ${ring(soc, socColor)}
+      <div style="flex:1;min-width:220px">
+        <h1>${esc(name)}</h1>
+        <div class="muted">${esc([b.bikemodel, b.biketype, b.size, b.color].filter(Boolean).join(" · "))}</div>
+        <div class="badges">
+          ${s.lock_flag ? `<span class="badge b-green">Gesperrt</span>` : s.lock_flag === false ? `<span class="badge b-amber">Offen</span>` : ""}
+          ${s.theft_flag ? `<span class="badge b-red">Diebstahlmodus</span>` : ""}
+          ${s.light_on ? `<span class="badge b-amber">Licht an</span>` : ""}
+          ${mf.display_maintenance_event ? `<span class="badge b-red">Service fällig</span>` : ""}
+          ${b.has_crash_detection ? `<span class="badge b-blue">Crash Alert</span>` : ""}
+        </div>
+        <div class="small muted">Daten vom Bike ${ago(s.rcvts)} · abgefragt ${ago(o.last_poll)}</div>
+        ${health != null ? `<div style="margin-top:12px"><div class="small muted">Akku-Gesundheit ${fmt(health)} %</div>
+          <div class="bar"><i style="width:${health}%;background:${health < 70 ? css("--red") : health < 80 ? css("--amber") : css("--green")}"></i></div></div>` : ""}
+      </div></div></div>
+    <div class="card"><h2>Kennzahlen</h2><div class="tiles">
+      ${tile("Kilometerstand", unit(s.total_distance, 0, "km"))}
+      ${tile("Fahrzeit", unit(s.total_time / 3600, 0, "h"))}
+      ${tile("Energie", unit(s.total_energy_consumption / 1000, 1, "kWh"))}
+      ${tile("Ø Verbrauch", unit(lifeWhKm, 1, "Wh/km"))}
+      ${tile("Ø Tempo", unit(s.average_speed_total, 1, "km/h"))}
+      ${tile("Einschaltzyklen", fmt(s.power_on_cycles))}
+      ${tile("Akku-Temp.", unit(s.battery_temp, 1, "°C"))}
+      ${tile("Motor-Temp.", unit(s.motor_temp, 1, "°C"))}
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px"><h2>Position <span class="r small">${p.latitude != null ? `GPS ${ago(p.timets)} · ${fmt(p.altitude)} m ü. M. · <a href="https://www.google.com/maps?q=${p.latitude},${p.longitude}" target="_blank" rel="noopener">Google Maps</a>` : ""}</span></h2>
+    ${p.latitude != null ? `<div id="map"></div><div class="small muted" style="margin-top:8px">Linie: Positionen der letzten 7 Tage, die der Sammler gesehen hat (${(o.track || []).length} Punkte).</div>` : `<p class="muted">Keine Position vorhanden.</p>`}
+  </div>
+
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><h2>Gefahren</h2>
+      ${["week", "month", "year"].map(k => { const x = per[k] || {}; const lbl = {week: "Diese Woche", month: "Dieser Monat", year: "Dieses Jahr"}[k];
+        return row(lbl, `${fmt(x.km, 0)} km · ${fmt(x.days)} Tage · ${x.km ? fmt(x.wh / x.km, 1) : "–"} Wh/km`); }).join("")}
+      ${row("Ø pro Tag (30 Tage)", o.extra?.km_avg_30_days != null ? fmt(o.extra.km_avg_30_days, 1) + " km" : null)}
+      ${row("Bester Tag", o.extra?.day_record != null ? fmt(o.extra.day_record, 1) + " km" : null)}
+      ${row("Letzter Trip", s.trip_distance != null ? `${fmt(s.trip_distance, 1)} km · ${dur(s.trip_time)} · Ø ${fmt(s.average_speed_trip, 1)} km/h` : null)}
+    </div>
+    <div class="card"><h2>Service</h2>
+      ${nextKm != null && interval ? `<div class="big">${nextKm <= 0 ? "fällig" : fmt(nextKm) + " km"}</div><div class="muted small">bis zum nächsten Service${mf.next_maintenance_date ? `, spätestens am ${dYmd(mf.next_maintenance_date)}` : ""}</div>
+        <div class="bar"><i style="width:${Math.min(100, sinceKm / interval * 100)}%;background:${nextKm <= 300 ? css("--red") : css("--accent")}"></i></div>` : ""}
+      ${row("Letzter Service", logs[0] ? `${dd(logs[0].created_on)} · ${esc(logs[0].title)}` : (mf.last_maintenance_reset_date ? dYmd(mf.last_maintenance_reset_date) : null))}
+      ${row("Intervall", interval ? fmt(interval) + " km" : null)}
+      ${row("Erinnerung", mf.customer_enabled_maintenance == null ? null : mf.customer_enabled_maintenance ? "ein" : "aus")}
+      ${row("Garantie bis", svc.warranty ? dYmd(svc.warranty.end_date) : null)}
+      <p style="margin:12px 0 0"><a href="#service">Servicebuch öffnen →</a></p>
+    </div>
+    <div class="card"><h2>Einstellungen</h2>
+      ${tuning ? `<div class="big">${esc(tuning)}</div><div class="muted small">Stufe 2: Geschwindigkeit / Drehmoment / Agilität${PRESETS[tuning] ? ` · Preset „${PRESETS[tuning]}“` : " · eigene Einstellung"}</div>` : ""}
+      <div style="margin-top:10px">
+      ${row("Rekuperation", set.recup_level_user_offset != null ? `${set.recup_level_user_offset} <span class="muted">(2–18)</span>` : null)}
+      ${row("Drehmomentsensor", set.user_torque_sensitivity != null ? `${set.user_torque_sensitivity} <span class="muted">(−50–50)</span>` : null)}
+      ${row("Auto-Lock", u.auto_lock_mode == null ? null : u.auto_lock_mode ? "ein" : "aus")}
+      ${row("Ausschalten nach", u.auto_power_off_time ? fmt(u.auto_power_off_time / 60) + " min" : null)}
+      ${row("Display", [u.language?.toUpperCase(), u.distance_unit, u.clock_format].filter(Boolean).join(" · "))}
+      ${row("Firmware", [s.suiversion && "SUI " + s.suiversion, s.tntversion && "TNT " + s.tntversion].filter(Boolean).join(" · "))}
+      ${row("Konnektivität", b.connectivity)}
+      </div>
+    </div>
+  </div>`;
+
+  if (p.latitude != null) {
+    map = L.map("map", {scrollWheelZoom: false}).setView([p.latitude, p.longitude], 15);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "© OpenStreetMap-Mitwirkende"}).addTo(map);
+    const pts = (o.track || []).map(t => [t.lat, t.lon]);
+    if (pts.length > 1) L.polyline(pts, {color: css("--blue"), weight: 4, opacity: .7}).addTo(map);
+    (o.track || []).forEach(t => L.circleMarker([t.lat, t.lon], {radius: 3, color: css("--blue"), weight: 1, fillOpacity: .6})
+      .bindTooltip(dt(t.timets)).addTo(map));
+    L.circleMarker([p.latitude, p.longitude], {radius: 11, color: "#fff", weight: 3, fillColor: css("--accent"), fillOpacity: 1})
+      .bindPopup(`<b>${esc(name)}</b><br>${dt(p.timets)}<br>${fmt(p.altitude)} m ü. M.`).addTo(map);
+  }
+}
+
+// --------------------------------------------------------------------------------------- Statistik
+async function viewStats() {
+  const st = await api(`/api/stats?bike=${bikeId}`);
+  const months = st.months || [], years = st.years || [], days = st.days || [], all = st.all || {};
+  const rides = st.rides || [];
+  const lbl = m => new Date(+m.month.slice(0, 4), +m.month.slice(4, 6) - 1, 1).toLocaleDateString("de-CH", {month: "short", year: "2-digit"});
+  $("#app").innerHTML = `
+  <div class="card"><h2>Gesamt</h2><div class="tiles">
+    ${tile("Distanz", unit(all.total_km, 0, "km"))}
+    ${tile("Fahrzeit", unit(all.total_sec / 3600, 0, "h"))}
+    ${tile("Energie", unit(all.total_wh / 1000, 1, "kWh"))}
+    ${tile("Ø Verbrauch", unit(all.total_wh && all.total_km ? all.total_wh / all.total_km : null, 1, "Wh/km"))}
+    ${tile("Ø Tempo", unit(all.kmh, 1, "km/h"))}
+    ${tile("Fahrtage", fmt(all.active_days))}
+  </div></div>
+  <div class="card" style="margin-top:14px"><h2>Pro Monat <span class="r small muted">Balken: km · Linie: Wh/km</span></h2>
+    <div class="chart"><canvas id="cm"></canvas></div></div>
+  <div class="card" style="margin-top:14px"><h2>Letzte 90 Tage</h2>
+    <div class="seg"><button data-m="km" class="on">km</button><button data-m="whkm">Wh/km</button><button data-m="kmh">km/h</button></div>
+    <div class="chart"><canvas id="cd"></canvas></div></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Pro Jahr</h2><div class="scroll"><table>
+      <tr><th>Jahr</th><th class="n">km</th><th class="n">Tage</th><th class="n">Fahrzeit</th><th class="n">Wh/km</th><th class="n">Bester Tag</th></tr>
+      ${years.slice().reverse().map(y => `<tr><td>${y.year}</td><td class="n">${fmt(y.km)}</td><td class="n">${fmt(y.days)}</td>
+        <td class="n">${dur(y.sec)}</td><td class="n">${y.km ? fmt(y.wh / y.km, 1) : "–"}</td><td class="n">${fmt(y.best, 1)} km</td></tr>`).join("")}
+    </table></div><p class="small muted">Aus der Monatsstatistik seit Beginn der Aufzeichnung bei Stromer. „Bester Tag“ nur für die letzten 400 Tage.</p></div>
+    <div class="card"><h2>Monate</h2><div class="scroll" style="max-height:340px;overflow-y:auto"><table>
+      <tr><th>Monat</th><th class="n">km</th><th class="n">Fahrtage</th><th class="n">Wh/km</th><th class="n">Ø km/h</th></tr>
+      ${months.slice().reverse().filter(m => m.km > 0).map(m => `<tr><td>${lbl(m)}</td><td class="n">${fmt(m.km)}</td><td class="n">${fmt(m.active_days)}</td>
+        <td class="n">${fmt(m.wh / m.km, 1)}</td><td class="n">${m.sec ? fmt(m.km / (m.sec / 3600), 1) : "–"}</td></tr>`).join("")}
+    </table></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Erkannte Fahrten (60 Tage)</h2>
+    <p class="small muted" style="margin-top:-6px">Aus dem Kilometer- und Energiezähler. Die Dauer ist die Zeit zwischen zwei Datenständen und daher bei seltenen Uploads zu lang.</p>
+    <div class="scroll"><table><tr><th>Start</th><th class="n">km</th><th class="n">Wh</th><th class="n">Wh/km</th><th class="n">Akku %</th><th class="n">Dauer</th><th>Tuning</th></tr>
+    ${rides.map(r => `<tr><td>${dt(r.start)}</td><td class="n">${fmt(r.km, 1)}</td><td class="n">${fmt(r.wh)}</td><td class="n">${fmt(r.wh_per_km, 1)}</td>
+      <td class="n">${fmt(r.soc_used)}</td><td class="n">${fmt(r.minutes)} min</td><td>${esc(r.tuning)}</td></tr>`).join("") ||
+      `<tr><td colspan="7" class="muted">Noch keine Fahrt erkannt. Der Sammler läuft erst seit Kurzem.</td></tr>`}
+    </table></div></div>`;
+
+  const grid = css("--line"), muted = css("--muted");
+  Chart.defaults.color = muted; Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  const real = months.filter(m => m.km > 0 || months.indexOf(m) >= months.findIndex(x => x.km > 0));
+  charts.push(new Chart($("#cm"), {data: {labels: real.map(lbl), datasets: [
+    {type: "bar", label: "km", data: real.map(m => m.km), backgroundColor: css("--accent"), borderRadius: 6, yAxisID: "y"},
+    {type: "line", label: "Wh/km", data: real.map(m => m.km ? m.wh / m.km : null), borderColor: css("--green"), backgroundColor: css("--green"), tension: .3, yAxisID: "y2", pointRadius: 3}]},
+    options: {maintainAspectRatio: false, interaction: {mode: "index", intersect: false},
+      scales: {y: {grid: {color: grid}, title: {display: true, text: "km"}}, y2: {position: "right", grid: {display: false}, title: {display: true, text: "Wh/km"}}}}}));
+
+  const dayLbl = d => `${d.day.slice(6, 8)}.${d.day.slice(4, 6)}.`;
+  const metric = {km: d => d.km, whkm: d => d.km > 0.5 ? d.wh / d.km : null, kmh: d => d.sec ? d.km / (d.sec / 3600) : null};
+  const dc = new Chart($("#cd"), {type: "bar", data: {labels: days.map(dayLbl), datasets: [{label: "km", data: days.map(metric.km), backgroundColor: css("--blue"), borderRadius: 4}]},
+    options: {maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {y: {grid: {color: grid}}, x: {grid: {display: false}}}}});
+  charts.push(dc);
+  document.querySelectorAll(".seg button").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === btn));
+    dc.data.datasets[0].data = days.map(metric[btn.dataset.m]);
+    dc.data.datasets[0].label = btn.textContent;
+    dc.data.datasets[0].backgroundColor = {km: css("--blue"), whkm: css("--green"), kmh: css("--violet")}[btn.dataset.m];
+    dc.update();
+  });
+}
+
+// --------------------------------------------------------------------------------------- Service
+async function viewService() {
+  const o = await api(`/api/overview?bike=${bikeId}`);
+  const svc = o.service || {}, w = svc.warranty || {}, shop = svc.shop || {}, b = o.bike || {};
+  const logs = (svc.servicelogs || []).slice().sort((a, c) => (c.created_on || 0) - (a.created_on || 0));
+  const start = ymd(w.start_date), end = ymd(w.end_date), now = new Date();
+  const wFrac = start && end ? (now - start) / (end - start) : null;
+  const daysLeft = end ? Math.round((end - now) / 86400000) : null;
+  const status = w.status ? (WARRANTY[String(w.status).toLowerCase()] || w.status) : null;
+  const parts = svc.bikeparts || [];
+  $("#app").innerHTML = `
+  <div class="grid g2">
+    <div class="card"><h2>Letzter Service</h2>
+      ${logs[0] ? `<div class="big">${dd(logs[0].created_on)}</div><div class="muted">${esc(logs[0].title)} · ${ago(logs[0].created_on)}</div>` : `<p class="muted">Keine Einträge.</p>`}
+    </div>
+    <div class="card"><h2>Garantie</h2>
+      ${status ? `<div class="big" style="font-size:24px">${esc(status)}</div>` : ""}
+      ${wFrac != null ? `<div class="bar"><i style="width:${Math.min(100, Math.max(0, wFrac * 100))}%;background:${daysLeft < 0 ? css("--red") : css("--green")}"></i></div>
+        <div class="small muted">${daysLeft < 0 ? "abgelaufen" : `noch ${daysLeft > 60 ? fmt(daysLeft / 30.4) + " Monate" : daysLeft + " Tage"}`}</div>` : ""}
+      ${row("Beginn", dYmd(w.start_date))}${row("Ende", dYmd(w.end_date))}
+      ${row("Status (Server)", w.status ? `<code>${esc(w.status)}</code>` : null)}
+      ${w.warranty_extension_offer_link ? `<p><a class="btn" href="${esc(w.warranty_extension_offer_link)}" target="_blank" rel="noopener">Angebot öffnen</a></p>` : ""}
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Servicebuch (${logs.length})</h2><div class="timeline">
+      ${logs.map(l => `<div class="ti"><div class="d">${dd(l.created_on)}</div><div><b>${esc(l.title)}</b></div>
+        ${l.note ? `<div class="muted small">${esc(l.note)}</div>` : ""}</div>`).join("") || `<p class="muted">Keine Einträge.</p>`}
+    </div></div>
+    <div>
+      <div class="card"><h2>Händler</h2>
+        <div style="font-weight:650;font-size:18px">${esc(shop.name)}</div>
+        <div class="muted">${esc([shop.street, [shop.postal_code, shop.city].filter(Boolean).join(" "), shop.country_name].filter(Boolean).join(", "))}</div>
+        <p style="display:flex;gap:8px;flex-wrap:wrap">
+          ${shop.phone ? `<a class="btn" href="tel:${esc(String(shop.phone).replace(/\s/g, ""))}">${esc(shop.phone)}</a>` : ""}
+          ${shop.latitude ? `<a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${shop.latitude},${shop.longitude}" target="_blank" rel="noopener">Route</a>` : ""}
+        </p></div>
+      <div class="card" style="margin-top:14px"><h2>Bike</h2>
+        ${row("Modell", esc([svc.bikemodel, svc.biketype].filter(Boolean).join(" · ")))}
+        ${row("Grösse", esc(svc.size))}${row("Farbe", esc(svc.color))}
+        ${row("Rahmennummer", esc(svc.serial))}${row("VIN", esc(svc.vin))}
+        ${row("Hardware", esc(b.hardware))}
+      </div>
+      <div class="card" style="margin-top:14px"><h2>Komponenten (${parts.length})</h2>
+        ${parts.map(x => row(CATEGORY[x.category] || x.category || "Teil", `${esc(x.name)}<br><span class="muted small">SN ${esc(x.serial)}</span>`)).join("") || `<p class="muted">Keine.</p>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// --------------------------------------------------------------------------------------- Routing
+const VIEWS = {uebersicht: viewOverview, statistik: viewStats, service: viewService};
+async function render() {
+  const v = (location.hash || "#uebersicht").slice(1);
+  document.querySelectorAll("nav a[data-v]").forEach(a => a.classList.toggle("on", a.dataset.v === v));
+  cleanup();
+  try {
+    if (bikeId == null) {
+      const bikes = await api("/api/bikes");
+      if (!bikes.length) { $("#app").innerHTML = `<div class="card"><p>Noch keine Daten. <a href="/login">Beim Datensammler anmelden</a>, dann ein paar Minuten warten.</p></div>`; return; }
+      bikeId = bikes[0].bikeid;
+      if (bikes.length > 1) {
+        const sel = $("#bike"); sel.hidden = false;
+        sel.innerHTML = bikes.map(b => `<option value="${b.bikeid}">${esc(b.nickname || b.bikemodel)}</option>`).join("");
+        sel.onchange = () => { bikeId = +sel.value; render(); };
+      }
+    }
+    await (VIEWS[v] || viewOverview)();
+  } catch (e) {
+    $("#app").innerHTML = `<div class="card"><h2>Fehler</h2><p>${esc(e.message)}</p></div>`;
+  }
+}
+window.addEventListener("hashchange", render);
+render();
+setInterval(() => { if ((location.hash || "#uebersicht") === "#uebersicht" && !document.hidden) render(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>

@@ -13,13 +13,21 @@ Zweck: herausfinden, ob die Cloud-Daten für eine Verbrauchsauswertung pro Fahrt
 | Zustand (Akku, km, Wh-Zähler, Temperaturen, Schloss) | `bike/{id}/state/?cached=true` | 5 min |
 | Position | `bike/{id}/position/?cached=true` | 5 min |
 | Tuning Stufe 2, Sensoren | `bike/{id}/settings/` | 30 min, nur Änderungen |
-| Tagesstatistik 400 Tage, Gesamtstatistik | `bike/statistics/` | 6 h |
+| Tagesstatistik 400 Tage, Monatsstatistik seit Beginn, Gesamt, Rekorde | `bike/statistics/` | 6 h |
+| Servicebuch, Garantie, Händler, Display-Einstellungen | `bike/{id}/service_info/`, `settings/` | 6 h |
 
 - Nur lesen. Keine Befehle ans Bike.
 - Immer `cached=true`: Das Bike wird nie live abgefragt, seine Mobilfunkverbindung wird nicht belastet.
 - Ein neuer Datenstand wird nur gespeichert, wenn das Bike wirklich neue Daten geschickt hat (Zeitstempel `rcvts`).
 
 Webseite: `http://192.168.0.2:8095`
+
+**Mein Stromer** (`/`):
+- Übersicht: Akku, Akku-Gesundheit, Schloss, Kennzahlen, Karte mit aktueller Position und Spur der letzten 7 Tage, gefahrene km pro Woche/Monat/Jahr, nächster Service, Einstellungen (Tuning Stufe 2, Rekuperation, Display)
+- Statistik: pro Monat seit Beginn (km und Wh/km), letzte 90 Tage, pro Jahr, erkannte Fahrten
+- Service: Servicebuch, Garantie, Händler, Bike-Daten, Komponenten
+
+**Daten** (`/daten`), zur Kontrolle des Sammlers:
 - Status, aktuelle Werte, Tuning
 - **Wie oft schickt das Bike Daten?** Anzahl neuer Datenstände, Abstände
 - Verlauf 7 Tage (Akku, km, Wh)
@@ -49,6 +57,9 @@ Stromer erlaubt nach dem Login nur die Rücksprungadresse `stromer://auth`. Eine
 Danach erneuert der Sammler den Zugang selbst (Refresh-Token). Der Token liegt in `DATA_LOCATION/token.json` (nur für uid 1000 lesbar).
 
 ## Hinweise
+
+- Die Einstellungen liefert der Server nur in den Feldgruppen der offiziellen App (Tuning; Rekuperation/Sensor; Display). Gemischte Gruppen ergeben `syntax_error`.
+- Garantie-Status kommt kleingeschrieben und kann Werte haben, die die offizielle App 4.2.6 nicht kennt (z. B. `max_reached`). Das ist sehr wahrscheinlich der Grund, warum dort das Servicebuch leer bleibt.
 
 - Nur im Heimnetz: Die Webseite hat kein eigenes Login. Port 8095 nicht in der Fritz!Box freigeben.
 - Updates: `git pull && docker compose up -d --build`

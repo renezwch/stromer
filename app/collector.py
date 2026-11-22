@@ -89,6 +89,8 @@ def init_db():
             tuning_agility INTEGER, recup INTEGER, sensitivity INTEGER, body TEXT);
         CREATE TABLE IF NOT EXISTS daily (
             day TEXT PRIMARY KEY, km REAL, sec REAL, wh REAL, active_days REAL, fetched_at REAL);
+        CREATE TABLE IF NOT EXISTS monthly (
+            month TEXT PRIMARY KEY, km REAL, sec REAL, wh REAL, active_days REAL, total_days REAL, fetched_at REAL);
         CREATE TABLE IF NOT EXISTS polls (
             fetched_at REAL, kind TEXT, bike_id INTEGER, ok INTEGER, rcvts REAL, message TEXT);
         CREATE TABLE IF NOT EXISTS events (ts REAL, level TEXT, message TEXT);
@@ -395,6 +397,35 @@ def poll_statistics():
         event("warn", str(e))
 
 
+def poll_info(bike_id: int):
+    """Service booklet (incl. dealer and warranty) and display settings; change rarely."""
+    _, body = api_get(f"bike/{bike_id}/service_info/")
+    save_raw("service_info", bike_id, True, body)
+    fields = "auto_lock_mode,auto_power_off_time,date_format,distance_unit,language,speed_unit,clock_format"
+    _, body = api_get(f"bike/{bike_id}/settings/", {"fields": fields})
+    save_raw("settings_units", bike_id, True, body)
+
+
+def poll_months():
+    """Monthly statistics since the first record (the server has data from about 2022)."""
+    end = datetime.now()
+    data, body = api_get("bike/statistics/", {"start": "20150101", "end": end.strftime("%Y%m%d"), "resolution": "months"})
+    save_raw("statistics_months", None, True, body)
+    rows = data if isinstance(data, list) else [data]
+    with db() as con:
+        for r in rows:
+            m = str(r.get("start") or "")[:6]
+            if len(m) == 6:
+                con.execute("INSERT OR REPLACE INTO monthly VALUES (?,?,?,?,?,?,?)", (
+                    m, num(r.get("km")), num(r.get("sec")), num(r.get("wh")), num(r.get("active_days")),
+                    num(r.get("total_days")), time.time()))
+    try:
+        _, body = api_get("bike/statistics/extra_data/", {"end": end.strftime("%Y%m%d"), "resolution": "days"})
+        save_raw("statistics_extra", None, True, body)
+    except ApiError as e:
+        event("warn", str(e))
+
+
 def poller():
     last = {"state": 0.0, "settings": 0.0, "statistics": 0.0}
     bikes: list = []
@@ -407,6 +438,9 @@ def poller():
                 if not bikes or now - last["statistics"] >= POLL_STATISTICS_HOURS * 3600:
                     bikes = poll_bikes()
                     poll_statistics()
+                    poll_months()
+                    for b in bikes:
+                        poll_info(b.get("bikeid"))
                     last["statistics"] = now
                 if now - last["state"] >= POLL_STATE_MINUTES * 60:
                     for b in bikes:
@@ -547,7 +581,7 @@ def page(title: str, body: str) -> bytes:
     return f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)}</title>
 <style>{CSS}</style></head><body>
-<header><h1>Stromer Datensammler</h1><a class="btn" href="/">Übersicht</a><a class="btn" href="/login">Login</a></header>
+<header><h1>Stromer Datensammler</h1><a class="btn" href="/">Mein Stromer</a><a class="btn" href="/daten">Daten</a><a class="btn" href="/login">Login</a></header>
 <main>{body}</main></body></html>""".encode()
 
 
@@ -648,6 +682,69 @@ def _place(p) -> str:
     return f'<a href="https://www.openstreetmap.org/?mlat={p["lat"]:.5f}&mlon={p["lon"]:.5f}#map=16/{p["lat"]:.5f}/{p["lon"]:.5f}">{p["lat"]:.3f}, {p["lon"]:.3f}</a>'
 
 
+def latest(kind: str, bike_id=None):
+    """Data of the newest stored answer of one kind (envelope removed, settings groups merged)."""
+    with db() as con:
+        if bike_id is None:
+            r = con.execute("SELECT body, fetched_at FROM raw WHERE kind = ? AND ok = 1 ORDER BY id DESC LIMIT 1", (kind,)).fetchone()
+        else:
+            r = con.execute("SELECT body, fetched_at FROM raw WHERE kind = ? AND bike_id = ? AND ok = 1 ORDER BY id DESC LIMIT 1",
+                            (kind, bike_id)).fetchone()
+    if not r:
+        return None
+    obj = json.loads(r["body"])
+    parts = obj if kind == "settings" and isinstance(obj, list) else [obj]
+    merged = None
+    for part in parts:
+        d = part.get("data", part) if isinstance(part, dict) else part
+        if kind in ("bikes", "statistics_days", "statistics_months"):
+            return d
+        d = first(d)
+        merged = {**(merged or {}), **d} if isinstance(d, dict) else d
+    return merged
+
+
+def bikes_list() -> list:
+    d = latest("bikes")
+    return (d if isinstance(d, list) else [d]) if d else []
+
+
+def overview(bike_id: int) -> dict:
+    with db() as con:
+        track = [dict(r) for r in con.execute(
+            "SELECT timets, lat, lon, alt FROM position WHERE bike_id = ? AND timets > ? ORDER BY timets",
+            (bike_id, time.time() - 7 * 86400))]
+        last_poll = con.execute("SELECT MAX(fetched_at) FROM polls WHERE ok = 1").fetchone()[0]
+        today = datetime.now()
+        week = (today - timedelta(days=today.weekday())).strftime("%Y%m%d")
+        periods = {}
+        for key, since in (("week", week), ("month", today.strftime("%Y%m01")), ("year", today.strftime("%Y0101"))):
+            r = con.execute("SELECT SUM(km), SUM(sec), SUM(wh), COUNT(*) FROM daily WHERE day >= ? AND km > 0", (since,)).fetchone()
+            periods[key] = {"km": r[0], "sec": r[1], "wh": r[2], "days": r[3]}
+    bike = next((b for b in bikes_list() if b.get("bikeid") == bike_id), {})
+    return {
+        "bike": bike, "state": latest("state", bike_id), "position": latest("position", bike_id),
+        "settings": latest("settings", bike_id), "units": latest("settings_units", bike_id),
+        "service": latest("service_info", bike_id), "all": latest("statistics_all"),
+        "extra": latest("statistics_extra"), "track": track, "periods": periods,
+        "last_poll": last_poll, "logged_in": load_token() is not None,
+    }
+
+
+def stats_payload(bike_id: int) -> dict:
+    with db() as con:
+        months = [dict(r) for r in con.execute("SELECT * FROM monthly ORDER BY month")]
+        days = [dict(r) for r in con.execute("SELECT * FROM daily WHERE day >= ? ORDER BY day",
+                                             ((datetime.now() - timedelta(days=90)).strftime("%Y%m%d"),))]
+        # Years from the monthly statistics (complete since the first record), best day from the daily data.
+        years = [dict(r) for r in con.execute(
+            "SELECT substr(month,1,4) AS year, SUM(km) km, SUM(sec) sec, SUM(wh) wh, SUM(active_days) days, "
+            "(SELECT MAX(km) FROM daily WHERE substr(day,1,4) = substr(month,1,4)) best "
+            "FROM monthly WHERE km > 0 GROUP BY year ORDER BY year")]
+    return {"months": months, "days": days, "years": years, "all": latest("statistics_all"),
+            "extra": latest("statistics_extra"), "rides": rides(bike_id, 60)}
+
+
 def series(bike_id: int) -> dict:
     with db() as con:
         rows = con.execute("SELECT rcvts, soc, total_km, total_wh FROM state WHERE bike_id = ? AND rcvts > ? ORDER BY rcvts",
@@ -716,8 +813,17 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
         try:
-            if u.path == "/":
+            if u.path in ("/", "/index.html"):
+                with open(os.path.join(os.path.dirname(__file__), "static", "index.html"), "rb") as f:
+                    self.send(200, f.read())
+            elif u.path == "/daten":
                 self.send(200, page("Stromer Datensammler", dashboard()))
+            elif u.path == "/api/bikes":
+                self.send(200, json.dumps(bikes_list()).encode(), "application/json")
+            elif u.path == "/api/overview":
+                self.send(200, json.dumps(overview(int(q["bike"][0]))).encode(), "application/json")
+            elif u.path == "/api/stats":
+                self.send(200, json.dumps(stats_payload(int(q["bike"][0]))).encode(), "application/json")
             elif u.path == "/login":
                 self.send(200, page("Login", login_page()))
             elif u.path == "/api/series":
@@ -753,7 +859,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/poll":
             wake.set()
             time.sleep(3)
-            self.redirect("/")
+            self.redirect("/daten")
         else:
             self.send(404, b"")
 
