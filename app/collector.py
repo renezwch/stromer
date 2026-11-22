@@ -11,6 +11,8 @@ Standard library only.
 import base64
 import hashlib
 import html
+import http.cookiejar
+from html.parser import HTMLParser
 import json
 import os
 import secrets
@@ -169,6 +171,89 @@ def finish_login(redirect_url: str):
         save_token(tok)
     event("info", "Login erfolgreich, Token gespeichert")
     wake.set()
+
+
+class _GotCode(Exception):
+    def __init__(self, url: str):
+        self.url = url
+
+
+class _StopAtApp(urllib.request.HTTPRedirectHandler):
+    """Follows normal redirects, stops at stromer://auth and hands over that address."""
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        loc = headers.get("Location", "")
+        if loc.startswith(REDIRECT):
+            raise _GotCode(loc)
+        return super().http_error_302(req, fp, code, msg, headers)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_302
+
+
+class _Forms(HTMLParser):
+    """Collects the input fields of the forms on a page."""
+
+    def __init__(self):
+        super().__init__()
+        self.forms: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "form":
+            self.forms.append({"action": a.get("action") or "", "fields": {}, "buttons": []})
+        elif self.forms and tag in ("input", "button") and a.get("name"):
+            if a.get("type") == "submit" or tag == "button":
+                self.forms[-1]["buttons"].append((a["name"], a.get("value", "")))
+            else:
+                self.forms[-1]["fields"][a["name"]] = a.get("value") or ""
+
+
+def password_login(username: str, password: str):
+    """
+    Logs in on stromer-portal.ch like the browser window of the official app: login form
+    (with CSRF token and Referer), then the OAuth redirect to stromer://auth?code=...
+    The password is used for this one request only, never stored or logged.
+    """
+    url = start_login()
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), _StopAtApp())
+    ua = {"User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36",
+          "Accept-Language": "de-CH,de;q=0.9"}
+
+    def submit(page_url: str, form: dict, extra: dict):
+        target = urllib.parse.urljoin(page_url, form["action"] or page_url)
+        data = urllib.parse.urlencode({**form["fields"], **extra}).encode()
+        req = urllib.request.Request(target, data=data, headers={**ua, "Referer": page_url,
+                                                                 "Content-Type": "application/x-www-form-urlencoded"})
+        return opener.open(req, timeout=30)
+
+    try:
+        r = opener.open(urllib.request.Request(url, headers=ua), timeout=30)
+        page_url, body = r.geturl(), r.read().decode(errors="replace")
+        sent_credentials = False
+        for _ in range(3):  # login form, then possibly a consent form
+            parser = _Forms()
+            parser.feed(body)
+            form = next((f for f in parser.forms if "password" in f["fields"]), None)
+            if form:
+                if sent_credentials:
+                    raise RuntimeError("Stromer hat die Anmeldung abgelehnt. E-Mail und Passwort prüfen.")
+                r = submit(page_url, form, {"username": username, "password": password})
+                sent_credentials = True
+            else:
+                consent = next((f for f in parser.forms if f["buttons"] or "allow" in f["fields"]), None)
+                if not consent:
+                    raise RuntimeError("Unerwartete Antwort von Stromer, keine Weiterleitung zur App erhalten.")
+                allow = next((b for b in consent["buttons"] if "allow" in b[0].lower()), ("allow", "Authorize"))
+                r = submit(page_url, consent, {allow[0]: allow[1]})
+            page_url, body = r.geturl(), r.read().decode(errors="replace")
+        raise RuntimeError("Keine Weiterleitung zur App erhalten.")
+    except _GotCode as got:
+        finish_login(got.url)
+    except urllib.error.HTTPError as ex:
+        if ex.code == 403:
+            raise RuntimeError("Stromer meldet 403 (CSRF). Bitte nochmals versuchen.") from None
+        raise RuntimeError(f"Stromer antwortet {ex.code}.") from None
 
 
 def access_token() -> str:
@@ -571,9 +656,22 @@ def series(bike_id: int) -> dict:
 
 
 def login_page(message: str = "") -> str:
-    url = start_login()
     return f"""<div class="card"><h2>Bei Stromer anmelden</h2>
 {f'<p class="bad">{e(message)}</p>' if message else ''}
+<form method="post" action="/login-password" autocomplete="on">
+<p><input type="text" name="username" placeholder="E-Mail des Stromer-Kontos" autocomplete="username"></p>
+<p><input type="password" name="password" placeholder="Passwort" autocomplete="current-password"
+   style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit"></p>
+<p><button>Anmelden</button></p></form>
+<p class="muted">mynas meldet sich damit einmal bei stromer-portal.ch an, wie das Login-Fenster der offiziellen App.
+Das Passwort wird nicht gespeichert und nicht protokolliert, nur der Zugangs-Token bleibt auf mynas ({e(TOKEN_PATH)}).
+Die Verbindung zu dieser Seite ist unverschlüsselt (HTTP im Heimnetz).</p></div>
+<details class="card"><summary>Ohne Passwort: Code von Hand kopieren</summary>{manual_login()}</details>"""
+
+
+def manual_login() -> str:
+    url = start_login()
+    return f"""<div>
 <p class="muted">Stromer schickt nach dem Login an <code>stromer://auth?code=…</code>. Der Browser kann das nicht öffnen,
 es passiert scheinbar nichts. Die Adresse steckt aber im Netzwerk-Protokoll. Bist du bei Stromer schon angemeldet,
 kommt gar kein Login-Formular, nur dieser Sprung.</p>
@@ -636,7 +734,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         form = urllib.parse.parse_qs(self.rfile.read(length).decode())
-        if self.path == "/login":
+        if self.path == "/login-password":
+            try:
+                password_login(form.get("username", [""])[0].strip(), form.get("password", [""])[0])
+                self.redirect("/")
+            except Exception as ex:
+                self.send(200, page("Login", login_page(str(ex))))
+        elif self.path == "/login":
             try:
                 finish_login(form.get("url", [""])[0])
                 self.redirect("/")
