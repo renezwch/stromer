@@ -1,0 +1,20 @@
+# Stromer-Datensammler auf dem Raspberry Pi (mynas), nur im Heimnetz.
+# Liest Zustand, Position, Einstellungen und Statistik aus der Stromer-Cloud und speichert sie in SQLite.
+
+name: stromer
+
+services:
+  collector:
+    container_name: stromer_collector
+    build: .
+    image: stromer-collector:local
+    restart: always
+    ports:
+      - '${PORT:-8095}:8095'
+    environment:
+      - TZ=Europe/Zurich
+      - POLL_STATE_MINUTES=${POLL_STATE_MINUTES:-5}
+      - POLL_SETTINGS_MINUTES=${POLL_SETTINGS_MINUTES:-30}
+      - POLL_STATISTICS_HOURS=${POLL_STATISTICS_HOURS:-6}
+    volumes:
+      - ${DATA_LOCATION}:/data
